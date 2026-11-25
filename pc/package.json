@@ -1,0 +1,43 @@
+{
+  "name": "phone-remote-pc",
+  "productName": "Phone Remote",
+  "version": "1.0.0",
+  "description": "Xem và điều khiển điện thoại Android từ PC qua cáp USB",
+  "author": "Phone Remote",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.ngoc.phoneremote.pc",
+    "productName": "Phone Remote",
+    "directories": { "output": "dist" },
+    "files": [
+      "main.js", "preload.js", "renderer.js", "index.html",
+      "audio-worklet.js", "icon.png", "icon.ico", "package.json"
+    ],
+    "extraResources": [
+      { "from": "C:/Android/Sdk/platform-tools", "to": "platform-tools",
+        "filter": ["adb.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll", "NOTICE.txt"] },
+      { "from": "../android/app/build/outputs/apk/debug/app-debug.apk", "to": "PhoneRemote.apk" }
+    ],
+    "win": {
+      "icon": "icon.ico",
+      "target": ["nsis", "portable"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "PhoneRemote-Setup-${version}.exe",
+      "shortcutName": "Phone Remote"
+    },
+    "portable": {
+      "artifactName": "PhoneRemote-Portable-${version}.exe"
+    }
+  }
+}

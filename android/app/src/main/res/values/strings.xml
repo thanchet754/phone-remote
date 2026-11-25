@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Phone Remote</string>
+    <string name="accessibility_label">Phone Remote – điều khiển từ PC</string>
+    <string name="accessibility_desc">Cho phép PC chạm, vuốt và nhập chữ trên điện thoại này qua cáp USB.</string>
+</resources>

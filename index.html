@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone Remote</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#f1f5f9; --muted:#94a3b8; --ok:#22c55e; --bad:#ef4444; --accent:#3b82f6; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 "Segoe UI",system-ui,sans-serif; display:flex; height:100vh; }
+  #stage { flex:1; display:flex; align-items:center; justify-content:center; padding:12px; min-width:0; }
+  #screen { max-height:100%; max-width:100%; border-radius:14px; border:1px solid var(--line); background:#000; cursor:pointer; user-select:none; -webkit-user-drag:none; }
+  #side { width:270px; background:var(--card); border-left:1px solid var(--line); padding:14px; display:flex; flex-direction:column; gap:12px; overflow:auto; }
+  h1 { font-size:16px; margin:0; }
+  .status { font-size:12px; color:var(--muted); }
+  .status b.ok { color:var(--ok); } .status b.bad { color:var(--bad); }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  button { background:#334155; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 4px; cursor:pointer; font:inherit; }
+  button:hover { background:#475569; }
+  button.primary { background:var(--accent); border-color:var(--accent); }
+  input[type=text] { width:100%; background:#0f172a; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px; font:inherit; }
+  label { font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
+  .row { display:flex; gap:6px; }
+  .hint { font-size:12px; color:var(--muted); }
+  #err { color:var(--bad); font-size:12px; min-height:16px; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+  <div id="stage"><img id="screen" alt="Màn hình điện thoại" draggable="false"></div>
+  <div id="side">
+    <h1>Phone Remote</h1>
+    <div class="status">Thiết bị: <b id="dev" class="bad">chưa kết nối</b><br>Tốc độ: <span id="fps">–</span></div>
+    <div class="grid">
+      <button data-key="4">◀ Back</button>
+      <button data-key="3">● Home</button>
+      <button data-key="187">▣ Đa nhiệm</button>
+      <button data-key="24">Vol +</button>
+      <button data-key="25">Vol −</button>
+      <button data-key="26">Nguồn</button>
+    </div>
+    <div>
+      <label for="txt">Gõ chữ không dấu rồi Enter để gửi vào điện thoại</label>
+      <div class="row"><input type="text" id="txt" placeholder="hello"><button class="primary" id="send">Gửi</button></div>
+    </div>
+    <div>
+      <label for="host">Kết nối qua Wi-Fi (IP:cổng)</label>
+      <div class="row"><input type="text" id="host" placeholder="192.168.1.20:5555"><button id="conn">Nối</button></div>
+    </div>
+    <div id="err"></div>
+    <div class="hint">
+      • Bấm vào màn hình = chạm. Giữ lâu = nhấn giữ. Giữ và kéo = vuốt.<br>
+      • Khi con trỏ ở trên màn hình: gõ phím để nhập chữ, Enter, Backspace, Esc = Back.<br>
+      • Lăn chuột = cuộn.
+    </div>
+  </div>
+<script>
+const img = document.getElementById('screen');
+const errEl = document.getElementById('err');
+const devEl = document.getElementById('dev');
+const fpsEl = document.getElementById('fps');
+const txt = document.getElementById('txt');
+const hostInput = document.getElementById('host');
+let overScreen = false;
+
+async function api(path, body) {
+  const res = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : undefined);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Lỗi');
+  return data;
+}
+function showErr(e) { errEl.textContent = e ? (e.message || String(e)) : ''; }
+const run = (p) => p.then(() => showErr(null)).catch(showErr);
+
+// Vòng lặp lấy khung hình: tải xong khung này mới lấy khung kế
+let lastUrl = null;
+async function frameLoop() {
+  for (;;) {
+    const t0 = performance.now();
+    try {
+      const res = await fetch('/frame', { cache: 'no-store' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Không lấy được màn hình');
+      const url = URL.createObjectURL(await res.blob());
+      img.src = url;
+      if (lastUrl) URL.revokeObjectURL(lastUrl);
+      lastUrl = url;
+      if (devEl.className !== 'ok') showErr(null);
+      devEl.textContent = 'đã kết nối'; devEl.className = 'ok';
+      fpsEl.textContent = (1000 / (performance.now() - t0)).toFixed(1) + ' khung/giây';
+    } catch (e) {
+      devEl.textContent = 'chưa kết nối'; devEl.className = 'bad';
+      fpsEl.textContent = '–';
+      showErr(e);
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+}
+
+// Đổi toạ độ chuột trên ảnh → toạ độ điểm ảnh của điện thoại
+function toPhone(ev) {
+  const r = img.getBoundingClientRect();
+  const clamp = (v, max) => Math.max(0, Math.min(max, v));
+  return {
+    x: clamp(Math.round((ev.clientX - r.left) / r.width * img.naturalWidth), img.naturalWidth),
+    y: clamp(Math.round((ev.clientY - r.top) / r.height * img.naturalHeight), img.naturalHeight)
+  };
+}
+
+let down = null;
+img.addEventListener('mousedown', (e) => {
+  if (e.button === 0 && img.naturalWidth) { down = { p: toPhone(e), t: Date.now() }; e.preventDefault(); }
+});
+window.addEventListener('mouseup', (e) => {
+  if (!down) return;
+  const start = down; down = null;
+  const end = toPhone(e);
+  const dist = Math.hypot(end.x - start.p.x, end.y - start.p.y);
+  const ms = Date.now() - start.t;
+  if (dist < 15) {
+    if (ms > 600) run(api('/api/swipe', { x1: start.p.x, y1: start.p.y, x2: start.p.x, y2: start.p.y, ms }));
+    else run(api('/api/tap', start.p));
+  } else {
+    run(api('/api/swipe', { x1: start.p.x, y1: start.p.y, x2: end.x, y2: end.y, ms: Math.max(120, ms) }));
+  }
+});
+img.addEventListener('mouseenter', () => { overScreen = true; });
+img.addEventListener('mouseleave', () => { overScreen = false; });
+
+let wheelBusy = false;
+img.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  if (wheelBusy || !img.naturalWidth) return;
+  wheelBusy = true;
+  const p = toPhone(e);
+  const d = Math.round(img.naturalHeight * 0.25) * (e.deltaY > 0 ? -1 : 1);
+  api('/api/swipe', { x1: p.x, y1: p.y, x2: p.x, y2: p.y + d, ms: 200 }).catch(showErr).finally(() => { wheelBusy = false; });
+}, { passive: false });
+
+document.querySelectorAll('button[data-key]').forEach(b => {
+  b.addEventListener('click', () => run(api('/api/key', { code: +b.dataset.key })));
+});
+
+function sendText() {
+  const v = txt.value;
+  if (!v) return;
+  run(api('/api/text', { text: v }).then(() => { txt.value = ''; }));
+}
+document.getElementById('send').addEventListener('click', sendText);
+txt.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendText(); });
+
+document.getElementById('conn').addEventListener('click', () => {
+  api('/api/connect', { host: hostInput.value }).then(r => showErr({ message: r.result })).catch(showErr);
+});
+
+// Gõ phím trực tiếp khi con trỏ ở trên màn hình điện thoại
+const KEYS = { Enter: 66, Backspace: 67, Escape: 4, Tab: 61, Delete: 112, ArrowUp: 19, ArrowDown: 20, ArrowLeft: 21, ArrowRight: 22 };
+let typeBuf = '', typeTimer = null;
+function flushType() {
+  clearTimeout(typeTimer);
+  if (!typeBuf) return;
+  const t = typeBuf; typeBuf = '';
+  run(api('/api/text', { text: t }));
+}
+window.addEventListener('keydown', (e) => {
+  if (!overScreen || e.target === txt || e.target === hostInput || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (KEYS[e.key]) { e.preventDefault(); flushType(); run(api('/api/key', { code: KEYS[e.key] })); return; }
+  if (e.key.length === 1) {
+    e.preventDefault();
+    typeBuf += e.key;
+    clearTimeout(typeTimer);
+    typeTimer = setTimeout(flushType, 250);
+  }
+});
+
+frameLoop();
+</script>
+</body>
+</html>

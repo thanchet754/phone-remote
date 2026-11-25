@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<title>Phone Remote</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#f1f5f9; --muted:#94a3b8; --ok:#22c55e; --bad:#ef4444; --accent:#3b82f6; }
+  * { box-sizing: border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--text); font:13px/1.4 "Segoe UI",system-ui,sans-serif; display:flex; overflow:hidden; }
+  #stage { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; padding:10px; gap:8px; position:relative; }
+  #view { flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; }
+  #nav { display:flex; gap:10px; width:100%; max-width:440px; }
+  #nav button { flex:1; padding:10px 6px; font-size:15px; border-radius:10px; }
+  #screen { max-width:100%; max-height:100%; background:#000; border-radius:12px; border:1px solid var(--line); outline:none; touch-action:none; cursor:crosshair; }
+  #empty { position:absolute; top:40%; color:var(--muted); text-align:center; max-width:340px; pointer-events:none; }
+  #side { width:230px; background:var(--card); border-left:1px solid var(--line); padding:12px; display:flex; flex-direction:column; gap:10px; overflow:auto; }
+  h1 { font-size:15px; margin:0; }
+  select, button { width:100%; background:#334155; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 6px; font:inherit; cursor:pointer; }
+  button:hover { background:#475569; }
+  button.primary { background:var(--accent); border-color:var(--accent); }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .stat { font-size:12px; color:var(--muted); }
+  .stat b { color:var(--text); }
+  .ok { color:var(--ok) !important; } .bad { color:var(--bad) !important; }
+  #msg { font-size:12px; color:var(--bad); min-height:16px; white-space:pre-wrap; }
+  .hint { font-size:11.5px; color:var(--muted); }
+  .settings { display:flex; flex-direction:column; gap:6px; border-top:1px solid var(--line); padding-top:8px; }
+  .settings .stitle { font-weight:600; }
+  .settings label { font-size:11.5px; color:var(--muted); display:flex; flex-direction:column; gap:3px; }
+  .settings select { padding:5px 6px; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="view"><canvas id="screen" tabindex="0" width="2" height="2"></canvas></div>
+    <div id="nav">
+      <button data-key="recents" title="Đa nhiệm">▣ Đa nhiệm</button>
+      <button data-key="home" title="Home">● Home</button>
+      <button data-key="back" title="Back">◀ Back</button>
+    </div>
+    <div id="empty">Chọn điện thoại ở bên phải rồi bấm <b>Kết nối</b>.<br>Không cần mở app trên điện thoại, chỉ cần cắm cáp và mở khoá máy.</div>
+  </div>
+  <div id="side">
+    <h1>Phone Remote</h1>
+    <select id="devices"></select>
+    <div class="grid">
+      <button id="refresh">Tìm máy</button>
+      <button id="connect" class="primary">Kết nối</button>
+    </div>
+    <div class="stat">
+      Trạng thái: <b id="state" class="bad">chưa kết nối</b><br>
+      Hình: <b id="res">–</b><br>
+      Tốc độ: <b id="fps">–</b><br>
+      Trễ giải mã: <b id="lag">–</b><br>
+      Điều khiển: <b id="acc">–</b>
+    </div>
+    <div class="grid">
+      <button data-key="notifications">Thông báo</button>
+      <button data-vol="1">Vol +</button>
+      <button data-vol="-1">Vol −</button>
+      <button data-key="lock">Khoá máy</button>
+      <button id="wake">Mở màn hình</button>
+      <button id="screenoff" title="Tắt tấm nền điện thoại để tiết kiệm pin, vẫn xem và điều khiển trên PC">Tắt màn hình ĐT</button>
+      <button id="paste">Dán (Ctrl+V)</button>
+      <button id="audio" title="Bật: nghe trên PC, điện thoại im lặng. Tắt: âm thanh trở về loa điện thoại">Âm thanh: PC</button>
+    </div>
+    <div class="settings">
+      <div class="stitle">Cài đặt hình</div>
+      <label>Chế độ nhanh
+        <select id="preset">
+          <option value="custom">Tự chọn</option>
+          <option value="lowlag">Trễ thấp nhất</option>
+          <option value="balanced">Cân bằng</option>
+          <option value="sharp">Nét nhất</option>
+        </select>
+      </label>
+      <label>Độ phân giải
+        <select id="setSize">
+          <option value="0">Gốc của máy</option>
+          <option value="1920">Cạnh dài 1920</option>
+          <option value="1600">Cạnh dài 1600</option>
+          <option value="1280">Cạnh dài 1280</option>
+          <option value="960">Cạnh dài 960</option>
+        </select>
+      </label>
+      <label>Khung hình/giây tối đa
+        <select id="setFps">
+          <option value="120">120</option>
+          <option value="90">90</option>
+          <option value="60">60</option>
+          <option value="30">30</option>
+        </select>
+      </label>
+      <label>Chất lượng (bitrate)
+        <select id="setBitrate">
+          <option value="50000000">50 Mbps</option>
+          <option value="32000000">32 Mbps</option>
+          <option value="20000000">20 Mbps</option>
+          <option value="12000000">12 Mbps</option>
+          <option value="6000000">6 Mbps</option>
+        </select>
+      </label>
+    </div>
+    <div id="msg"></div>
+    <div class="hint" id="hint">
+      • Chuột trái: chạm, giữ, kéo, vuốt theo tay.<br>
+      • Chuột phải: Back. Lăn chuột: cuộn.<br>
+      • Bấm vào màn hình rồi gõ phím để nhập chữ (có dấu được). Enter, Backspace dùng được.<br>
+      • Clipboard đồng bộ hai chiều: copy/cut chữ hoặc ảnh ở bên nào thì bên kia dán được.<br>
+      • Ctrl+C / Ctrl+X / Ctrl+V trong khung màn hình = Copy / Cut / Dán trên điện thoại.<br>
+      • "Tắt màn hình ĐT": màn hình điện thoại tối để tiết kiệm pin, PC vẫn xem và điều khiển. Đừng bấm nút nguồn trên máy khi đang dùng chế độ này.
+    </div>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>
